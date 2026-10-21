@@ -18,6 +18,7 @@ echo "✅ Node $(node -v) / npm $(npm -v)"
 command -v pm2 >/dev/null 2>&1 || { echo "📦 Installing pm2..."; sudo npm install -g pm2; }
 
 # Downloader tools (.dl): ffmpeg (merge/convert) + yt-dlp (YouTube, Facebook, TikTok ...)
+command -v zip >/dev/null 2>&1 || { echo "📦 Installing zip..."; sudo apt-get install -y zip; }
 command -v ffmpeg >/dev/null 2>&1 || { echo "📦 Installing ffmpeg..."; sudo apt-get update -y && sudo apt-get install -y ffmpeg; }
 if ! command -v yt-dlp >/dev/null 2>&1; then
   echo "📦 Installing yt-dlp..."
