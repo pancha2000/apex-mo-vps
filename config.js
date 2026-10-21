@@ -17,5 +17,8 @@ module.exports = {
 
     // ===== VPS file sender =====
     // Folder on the VPS whose files can be fetched with .files / .getfile
+    // Downloader (.dl): max size in MB (WhatsApp limit is ~2000) and yt-dlp binary name
+    DL_MAX_MB: Number(process.env.DL_MAX_MB || 2000),
+    YTDLP_BIN: process.env.YTDLP_BIN || 'yt-dlp',
     VPS_FILES_DIR: process.env.VPS_FILES_DIR || path.join(__dirname, 'files'),
 };
