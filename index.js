@@ -24,6 +24,19 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 8000;
 
+// "<id>@lid" -> "<number>@s.whatsapp.net" (uses the alt jid WhatsApp sends, or Baileys' LID map)
+async function resolvePN(conn, mek, jid) {
+    if (!jid || !jid.endsWith('@lid')) return jid;
+    const k = mek.key;
+    const alt = jid === k.remoteJid ? k.remoteJidAlt : k.participantAlt;
+    if (alt) return alt;
+    try {
+        const pn = await conn.signalRepository?.lidMapping?.getPNForLID?.(jid);
+        if (pn) return pn.includes('@') ? pn : pn + '@s.whatsapp.net';
+    } catch (e) { /* ignore */ }
+    return jid;
+}
+
 async function connectToWA() {
     await connectDB();
     try {
@@ -108,10 +121,13 @@ async function connectToWA() {
     conn.ev.on('messages.upsert', async (mekEvent) => {
         const mek = mekEvent.messages[0];
         if (!mek.message || mek.key.remoteJid === 'status@broadcast') return;
-        if (mek.key.remoteJid.includes('@lid') || mek.message.protocolMessage) return;
+        if (mek.message.protocolMessage) return;
 
         const m = sms(conn, mek);
         if (!m || !m.type) return;
+        // New WhatsApp sends many chats as "<id>@lid". Convert the sender back to the real number
+        // so the owner check works (replies still go to the original chat jid).
+        m.sender = await resolvePN(conn, mek, m.sender);
 
         botSettings = getBotSettings();
         prefix = botSettings.PREFIX || ".";
@@ -126,8 +142,10 @@ async function connectToWA() {
         const pushname = m.pushName || 'User';
         const senderNumber = sender.split('@')[0];
         const botNumber = conn.user.id.split(':')[0];
-        const isMe = senderNumber === botNumber;
+        const botLid = (conn.user.lid || '').split(':')[0].split('@')[0];
+        const isMe = !!mek.key.fromMe || senderNumber === botNumber || (botLid && senderNumber === botLid);
         const isOwner = ownerNumber.includes(senderNumber) || isMe;
+        if (isCmd) console.log(`[CMD] ${prefix}${command} from ${senderNumber} chat=${from} owner=${isOwner}`);
         const botNumber2 = await jidNormalizedUser(conn.user.id);
 
         const groupMetadata = m.isGroup ? await conn.groupMetadata(from).catch(() => null) : null;
