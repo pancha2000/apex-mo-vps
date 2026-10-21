@@ -3,3 +3,4 @@ config.env
 auth_info_baileys/
 tmp/
 files/
+data/
