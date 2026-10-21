@@ -134,7 +134,7 @@ cmd({
     pattern: "dl",
     alias: ["download", "dlfile"],
     desc: "Download a link to the VPS and send it to WhatsApp",
-    use: ".dl <url>   (-n = don't send, -a = audio only, -z = zip first)",
+    use: "<url>  (-n save only, -a mp3, -z zip)",
     category: "vps",
     react: "⬇️",
     filename: __filename

@@ -35,7 +35,7 @@ cmd({
     pattern: "files",
     alias: ["ls", "vpsfiles"],
     desc: "List files in the VPS folder",
-    use: ".files [folder]",
+    use: "[folder]",
     category: "vps",
     react: "📂",
     filename: __filename
@@ -76,7 +76,7 @@ cmd({
     pattern: "getfile",
     alias: ["get", "vpsget", "fetchfile"],
     desc: "Send a VPS file to WhatsApp",
-    use: ".getfile <number|path>",
+    use: "<number|path>  (-z zip)",
     category: "vps",
     react: "📥",
     filename: __filename
@@ -117,7 +117,7 @@ cmd({
     pattern: "delfile",
     alias: ["rmfile"],
     desc: "Delete a file from the VPS folder",
-    use: ".delfile <number|path>",
+    use: "<number|path>",
     category: "vps",
     react: "🗑️",
     filename: __filename
