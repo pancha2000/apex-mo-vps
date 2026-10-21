@@ -15,6 +15,7 @@ const config = require('../config');
 const { cmd } = require('../command');
 
 const { sendDocument } = require('../lib/sendfile');
+const { registerListing } = require('../lib/vpsfiles');
 const MAX_BYTES = config.DL_MAX_MB * 1024 * 1024;
 const VIDEO_SITES = /(^|\.)(youtube\.com|youtu\.be|facebook\.com|fb\.watch|instagram\.com|tiktok\.com|twitter\.com|x\.com|vimeo\.com|soundcloud\.com|dailymotion\.com|reddit\.com|twitch\.tv|pinterest\.com|spotify\.com)$/i;
 
@@ -116,12 +117,13 @@ async function fetchToVps(url, dir, audioOnly) {
     }
 }
 
-async function sendToChat(conn, from, mek, file, reply) {
+async function sendToChat(conn, from, mek, file, reply, compress) {
     const size = fs.statSync(file).size;
     const name = path.basename(file);
     const type = mime.lookup(name) || 'application/octet-stream';
     const caption = `📄 ${name}\n📦 ${fmtSize(size)}`;
     const src = { url: file }; // streamed from disk
+    if (compress) return sendDocument(conn, from, mek, file, reply, { compress: true });
     if (type.startsWith('image/') && size < 10 * 1048576) return conn.sendMessage(from, { image: src, caption }, { quoted: mek });
     if (type.startsWith('video/') && size < 60 * 1048576) return conn.sendMessage(from, { video: src, mimetype: type, caption }, { quoted: mek });
     if (type.startsWith('audio/') && size < 60 * 1048576) return conn.sendMessage(from, { audio: src, mimetype: type }, { quoted: mek });
@@ -132,7 +134,7 @@ cmd({
     pattern: "dl",
     alias: ["download", "dlfile"],
     desc: "Download a link to the VPS and send it to WhatsApp",
-    use: ".dl <url>   (-n = don't send, -a = audio only)",
+    use: ".dl <url>   (-n = don't send, -a = audio only, -z = zip first)",
     category: "vps",
     react: "⬇️",
     filename: __filename
@@ -142,19 +144,19 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
     let file;
     try {
         const parts = (q || '').trim().split(/\s+/).filter(Boolean);
-        const flags = parts.filter(p => /^-[na]$/i.test(p)).map(p => p.toLowerCase());
+        const flags = parts.filter(p => /^-[naz]$/i.test(p)).map(p => p.toLowerCase());
         const url = parts.find(p => /^https?:\/\//i.test(p));
-        if (!url) return reply("❌ Link එකක් දෙන්න.\nඋදා: *.dl https://example.com/file.zip*\n*.dl -a <youtube link>* (mp3)\n*.dl -n <link>* (VPS එකට විතරක්)");
+        if (!url) return reply("❌ Link එකක් දෙන්න.\nඋදා: *.dl https://example.com/file.zip*\n*.dl -a <youtube link>* (mp3)\n*.dl -n <link>* (VPS එකට විතරක්)\n*.dl -z <link>* (zip කරලා එවන්න)");
 
         await reply("⏳ VPS එකට download කරනවා...");
         file = await fetchToVps(url, dlDir(), flags.includes('-a'));
         const size = fs.statSync(file).size;
-        const rel = path.relative(config.VPS_FILES_DIR, file);
+        const num = registerListing(from, file); // so the file can be fetched by number
 
-        if (flags.includes('-n')) return reply(`✅ VPS එකට save වුණා\n📄 ${path.basename(file)}\n📦 ${fmtSize(size)}\n📂 ${rel}\n\nWhatsApp එකට ගන්න: *.getfile ${rel}*`);
+        if (flags.includes('-n')) return reply(`✅ VPS එකට save වුණා\n📄 ${path.basename(file)}\n📦 ${fmtSize(size)}\n\n📥 WhatsApp එකට ගන්න: *.getfile ${num}*\n🗜️ Compress කරලා: *.getfile -z ${num}*`);
 
         await reply(`📤 WhatsApp එකට එවනවා... (${fmtSize(size)})`);
-        await sendToChat(conn, from, mek, file, reply);
+        await sendToChat(conn, from, mek, file, reply, flags.includes('-z'));
     } catch (e) {
         console.error('[dl]', e);
         reply(`❌ ${e.message}`);

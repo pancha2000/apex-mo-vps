@@ -8,10 +8,10 @@ const path = require('path');
 const mime = require('mime-types');
 const config = require('../config');
 const { sendDocument } = require('../lib/sendfile');
+const { lastList, listDir } = require('../lib/vpsfiles');
 const { cmd } = require('../command');
 
 const PAGE = 40;
-const lastList = new Map(); // chat jid -> { dir, items: [absolute paths] }
 
 const ROOT = () => {
     fs.mkdirSync(config.VPS_FILES_DIR, { recursive: true });
@@ -30,18 +30,6 @@ function safeResolve(rel) {
 
 const fmtSize = (b) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` :
     b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`;
-
-function listDir(dir) {
-    return fs.readdirSync(dir, { withFileTypes: true })
-        .filter(d => !d.name.startsWith('.'))
-        .map(d => {
-            const full = path.join(dir, d.name);
-            let st; try { st = fs.statSync(full); } catch { return null; }
-            return { name: d.name, full, isDir: st.isDirectory(), size: st.size };
-        })
-        .filter(Boolean)
-        .sort((a, b) => (b.isDir - a.isDir) || a.name.localeCompare(b.name));
-}
 
 cmd({
     pattern: "files",
@@ -97,7 +85,9 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
     if (!isOwner) return;
     try {
         let arg = (q || '').trim();
-        if (!arg) return reply("❌ උදා: *.getfile 2*  හෝ  *.getfile logs/app.log*");
+        const compress = /(^|\s)-z(\s|$)/i.test(arg);
+        arg = arg.replace(/(^|\s)-z(?=\s|$)/ig, ' ').trim();
+        if (!arg) return reply("❌ උදා: *.getfile 2*  හෝ  *.getfile logs/app.log*\nCompress කරලා ගන්න: *.getfile -z 2*");
 
         let rel = arg;
         if (/^\d+$/.test(arg)) {
@@ -116,7 +106,7 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
 
         const fileName = path.basename(real);
         await reply(`⏳ *${fileName}* (${fmtSize(st.size)}) එවනවා...`);
-        await sendDocument(conn, from, mek, real, reply); // splits automatically if too big for WhatsApp
+        await sendDocument(conn, from, mek, real, reply, { compress }); // splits automatically if too big for WhatsApp
     } catch (e) {
         console.error('[getfile]', e);
         reply(`❌ ${e.message}`);
