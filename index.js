@@ -1,3 +1,12 @@
+// libsignal prints huge "Closing session" dumps via console.info/warn - hide them so real logs are readable
+for (const lvl of ['info', 'warn']) {
+    const orig = console[lvl].bind(console);
+    console[lvl] = (...a) => {
+        if (typeof a[0] === 'string' && /^(Closing|Opening|Removing old closed|Migrating) /.test(a[0])) return;
+        orig(...a);
+    };
+}
+
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -55,7 +64,7 @@ async function connectToWA() {
     const { version } = await fetchLatestBaileysVersion();
 
     const conn = makeWASocket({
-        logger: P({ level: 'silent' }),
+        logger: P({ level: process.env.LOG_LEVEL || 'error' }),
         browser: Browsers.ubuntu("Chrome"),
         // Bad MAC Error එක වළක්වන ප්‍රධානම කොටස
         auth: {
@@ -128,6 +137,7 @@ async function connectToWA() {
         // New WhatsApp sends many chats as "<id>@lid". Convert the sender back to the real number
         // so the owner check works (replies still go to the original chat jid).
         m.sender = await resolvePN(conn, mek, m.sender);
+        if (!m.isGroup) console.log(`[MSG] ${m.chat} fromMe=${!!mek.key.fromMe} type=${m.type} body=${(m.body || '').slice(0, 40)}`);
 
         botSettings = getBotSettings();
         prefix = botSettings.PREFIX || ".";
