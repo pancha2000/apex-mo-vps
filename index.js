@@ -1,8 +1,8 @@
 // libsignal prints huge "Closing session" dumps via console.info/warn - hide them so real logs are readable
-for (const lvl of ['info', 'warn']) {
+for (const lvl of ['info', 'warn', 'error']) {
     const orig = console[lvl].bind(console);
     console[lvl] = (...a) => {
-        if (typeof a[0] === 'string' && /^(Closing|Opening|Removing old closed|Migrating) /.test(a[0])) return;
+        if (typeof a[0] === 'string' && /^(Closing|Opening|Removing old closed|Migrating|Session error)/.test(a[0])) return;
         orig(...a);
     };
 }
@@ -27,6 +27,9 @@ const axios = require('axios');
 const { File } = require('megajs');
 const path = require('path');
 const { getBotSettings, readEnv, connectDB } = require('./lib/mongodb');
+
+const BOT_STARTED_AT = Date.now(); // messages older than this (minus grace) are replays, not new commands
+const msgSeconds = (mek) => { const t = mek.messageTimestamp; return Number(t && t.toString ? t.toString() : t) || 0; };
 
 const ownerNumber = [String(config.OWNER_NUMBER || '94701391585')]; 
 const express = require("express");
@@ -131,6 +134,10 @@ async function connectToWA() {
         const mek = mekEvent.messages[0];
         if (!mek.message || mek.key.remoteJid === 'status@broadcast') return;
         if (mek.message.protocolMessage) return;
+        // WhatsApp re-delivers old pending messages after a restart/session change -> they would
+        // re-run old .alive/.menu commands and spam the chat. Ignore anything sent before we started.
+        const sent = msgSeconds(mek);
+        if (sent && sent < BOT_STARTED_AT / 1000 - 20) { console.log(`[SKIP] old message (${Math.round(BOT_STARTED_AT / 1000 - sent)}s before start)`); return; }
 
         const m = sms(conn, mek);
         if (!m || !m.type) return;
