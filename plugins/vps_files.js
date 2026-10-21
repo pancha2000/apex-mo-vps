@@ -7,9 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const mime = require('mime-types');
 const config = require('../config');
+const { sendDocument } = require('../lib/sendfile');
 const { cmd } = require('../command');
 
-const MAX_BYTES = 2 * 1024 * 1024 * 1024; // WhatsApp document limit (~2GB)
 const PAGE = 40;
 const lastList = new Map(); // chat jid -> { dir, items: [absolute paths] }
 
@@ -113,17 +113,10 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
         const st = fs.statSync(real);
         if (st.isDirectory()) return reply("📁 ඒක folder එකක්. *.files " + path.relative(root, real) + "* පාවිච්චි කරන්න.");
         if (st.size === 0) return reply("❌ File එක හිස්.");
-        if (st.size > MAX_BYTES) return reply(`❌ File එක ${fmtSize(st.size)} — WhatsApp වලට 2GB ට වඩා එවන්න බැහැ.`);
 
         const fileName = path.basename(real);
         await reply(`⏳ *${fileName}* (${fmtSize(st.size)}) එවනවා...`);
-        // { url: <local path> } makes Baileys stream the file from disk (no full read into RAM)
-        await conn.sendMessage(from, {
-            document: { url: real },
-            mimetype: mime.lookup(fileName) || 'application/octet-stream',
-            fileName,
-            caption: `📄 ${fileName}\n📦 ${fmtSize(st.size)}`
-        }, { quoted: mek });
+        await sendDocument(conn, from, mek, real, reply); // splits automatically if too big for WhatsApp
     } catch (e) {
         console.error('[getfile]', e);
         reply(`❌ ${e.message}`);
