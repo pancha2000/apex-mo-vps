@@ -1,6 +1,5 @@
 // plugins/settings.js (මෙය ඔබගේ කලින් update_env.js හි සංශෝධිත කොටස සහ .get විධානයද අඩංගු වේ)
 const { updateEnv, readEnv, getBotSettings } = require('../lib/mongodb');
-const EnvVar = require('../lib/mongodbenv');
 const { cmd } = require('../command');
 
 cmd({
