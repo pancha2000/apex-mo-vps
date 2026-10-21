@@ -19,7 +19,7 @@ const { File } = require('megajs');
 const path = require('path');
 const { getBotSettings, readEnv, connectDB } = require('./lib/mongodb');
 
-const ownerNumber = ['94701391585']; 
+const ownerNumber = [String(config.OWNER_NUMBER || '94701391585')]; 
 const express = require("express");
 const app = express();
 const port = process.env.PORT || 8000;
@@ -43,7 +43,6 @@ async function connectToWA() {
 
     const conn = makeWASocket({
         logger: P({ level: 'silent' }),
-        printQRInTerminal: true,
         browser: Browsers.ubuntu("Chrome"),
         // Bad MAC Error එක වළක්වන ප්‍රධානම කොටස
         auth: {
@@ -56,8 +55,13 @@ async function connectToWA() {
     });
 
     conn.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
-        
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log('📱 Session නැහැ/වැරදියි - මේ QR එක WhatsApp > Linked devices වලින් scan කරන්න:');
+            qrcode.generate(qr, { small: true });
+        }
+
         if (connection === 'close') {
             let reason = lastDisconnect.error?.output?.statusCode;
             console.log('Connection closed. Reason Code:', reason);
@@ -197,32 +201,43 @@ async function connectToWA() {
     });
 }
 
+// creds.json is only "real" once it contains a logged-in account (me). A fresh, never-linked
+// creds.json (auto-created by Baileys) must NOT block downloading SESSION_ID.
+function hasValidCreds(credsFile) {
+    try { return !!JSON.parse(fs.readFileSync(credsFile, 'utf8')).me; } catch { return false; }
+}
+
 async function startBot() {
     const authDir = path.join(__dirname, 'auth_info_baileys');
     const credsFile = path.join(authDir, 'creds.json');
+    fs.mkdirSync(authDir, { recursive: true });
 
-    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+    if (hasValidCreds(credsFile)) return connectToWA();
 
-    if (fs.existsSync(credsFile)) {
-        connectToWA();
-    } else if (config.SESSION_ID) {
-        console.log("Downloading session from MEGA...");
-        try {
-            const file = File.fromURL(`https://mega.nz/file/${config.SESSION_ID.trim()}`);
-            file.download((err, data) => {
-                if (!err) {
-                    fs.writeFileSync(credsFile, data);
-                    console.log("Session downloaded ✅");
-                    connectToWA();
-                } else {
-                    console.error("Mega download failed.");
-                    connectToWA();
-                }
-            });
-        } catch (e) {
+    const sid = String(config.SESSION_ID || '').trim().replace(/^https?:\/\/mega\.nz\/file\//, '');
+    if (!sid) {
+        console.log('ℹ️ SESSION_ID නැහැ - QR scan කරන්න ඕන.');
+        return connectToWA();
+    }
+    if (!sid.includes('#')) {
+        console.error('❌ SESSION_ID එකේ "#key" කොටස නැහැ! config.env එකේ quotes දාන්න:  SESSION_ID="id#key"  (dotenv එක # එකෙන් පස්සේ කොටස comment එකක් විදියට කපනවා)');
+        return connectToWA();
+    }
+
+    console.log("Downloading session from MEGA...");
+    try {
+        const file = File.fromURL(`https://mega.nz/file/${sid}`);
+        file.download((err, data) => {
+            if (err) {
+                console.error("❌ Mega download failed:", err.message || err);
+            } else {
+                fs.writeFileSync(credsFile, data);
+                console.log("Session downloaded ✅");
+            }
             connectToWA();
-        }
-    } else {
+        });
+    } catch (e) {
+        console.error("❌ SESSION_ID වැරදියි:", e.message);
         connectToWA();
     }
 }
