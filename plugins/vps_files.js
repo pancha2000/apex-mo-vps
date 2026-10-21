@@ -129,3 +129,36 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
         reply(`❌ ${e.message}`);
     }
 });
+
+cmd({
+    pattern: "delfile",
+    alias: ["rmfile"],
+    desc: "Delete a file from the VPS folder",
+    use: ".delfile <number|path>",
+    category: "vps",
+    react: "🗑️",
+    filename: __filename
+},
+async (conn, mek, m, { from, q, isOwner, reply }) => {
+    if (!isOwner) return;
+    try {
+        const arg = (q || '').trim();
+        if (!arg) return reply("❌ උදා: *.delfile 3*  හෝ  *.delfile downloads/movie.mp4*");
+        let rel = arg;
+        if (/^\d+$/.test(arg)) {
+            const it = lastList.get(from)?.items[Number(arg) - 1];
+            if (!it) return reply("❌ ඒ number එක නැහැ. මුලින් *.files* ගහන්න.");
+            rel = path.relative(ROOT(), it.full);
+        }
+        const { root, real, escaped } = safeResolve(rel);
+        if (escaped || (real && real === root)) return reply("🚫 ඒ path එකට අවසර නැහැ.");
+        if (!real) return reply("❌ File එක හොයාගන්න බැහැ.");
+        if (fs.statSync(real).isDirectory()) return reply("📁 Folder delete කරන්න බැහැ. File එකක් දෙන්න.");
+        fs.unlinkSync(real);
+        lastList.delete(from);
+        reply(`🗑️ Delete වුණා: ${path.relative(root, real)}`);
+    } catch (e) {
+        console.error('[delfile]', e);
+        reply(`❌ ${e.message}`);
+    }
+});
