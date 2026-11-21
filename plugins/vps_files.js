@@ -115,9 +115,9 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
 
 cmd({
     pattern: "delfile",
-    alias: ["rmfile"],
-    desc: "Delete a file from the VPS folder",
-    use: "<number|path>",
+    alias: ["rmfile", "del"],
+    desc: "Delete one or many files from the VPS folder",
+    use: "<number|range|path> ...   e.g. 1 3 5 | 2-6 | 1,4,7-9 | all",
     category: "vps",
     react: "🗑️",
     filename: __filename
@@ -126,20 +126,52 @@ async (conn, mek, m, { from, q, isOwner, reply }) => {
     if (!isOwner) return;
     try {
         const arg = (q || '').trim();
-        if (!arg) return reply("❌ උදා: *.delfile 3*  හෝ  *.delfile downloads/movie.mp4*");
-        let rel = arg;
-        if (/^\d+$/.test(arg)) {
-            const it = lastList.get(from)?.items[Number(arg) - 1];
-            if (!it) return reply("❌ ඒ number එක නැහැ. මුලින් *.files* ගහන්න.");
-            rel = path.relative(ROOT(), it.full);
+        if (!arg) return reply("❌ උදා: *.delfile 3*\n*.delfile 1 3 5*\n*.delfile 2-6*\n*.delfile 1,4,7-9*\n*.delfile all*  (listing එකේ හැම file එකම)\n*.delfile downloads/movie.mp4*");
+
+        const root = ROOT();
+        const last = lastList.get(from);
+        const tokens = arg.split(/[\s,]+/).filter(Boolean);
+        const targets = new Set();   // relative paths
+
+        // number mode: every token is a number, range (a-b) or "all"
+        const numeric = tokens.every((t) => /^(\d+(-\d+)?|all)$/i.test(t));
+        if (numeric) {
+            if (!last) return reply("❌ මුලින් *.files* ගහන්න.");
+            for (const t of tokens) {
+                let a, b;
+                if (/^all$/i.test(t)) { a = 1; b = last.items.length; }
+                else if (t.includes('-')) { [a, b] = t.split('-').map(Number); }
+                else { a = b = Number(t); }
+                if (a > b) [a, b] = [b, a];
+                for (let n = a; n <= b; n++) {
+                    const it = last.items[n - 1];
+                    if (!it) return reply(`❌ ${n} කියන number එක listing එකේ නැහැ. මුකුත් delete කළේ නැහැ.`);
+                    targets.add(path.relative(root, it.full));
+                }
+            }
+        } else {
+            // path mode: whole argument is one path (may contain spaces)
+            targets.add(arg);
         }
-        const { root, real, escaped } = safeResolve(rel);
-        if (escaped || (real && real === root)) return reply("🚫 ඒ path එකට අවසර නැහැ.");
-        if (!real) return reply("❌ File එක හොයාගන්න බැහැ.");
-        if (fs.statSync(real).isDirectory()) return reply("📁 Folder delete කරන්න බැහැ. File එකක් දෙන්න.");
-        fs.unlinkSync(real);
-        lastList.delete(from);
-        reply(`🗑️ Delete වුණා: ${path.relative(root, real)}`);
+
+        let ok = [], skipped = [];
+        for (const rel of targets) {
+            const { real, escaped } = safeResolve(rel);
+            if (escaped || (real && real === root)) { skipped.push(`${rel} (අවසර නැහැ)`); continue; }
+            if (!real) { skipped.push(`${rel} (හොයාගන්න බැහැ)`); continue; }
+            try {
+                if (fs.statSync(real).isDirectory()) { skipped.push(`${rel}/ (folder)`); continue; }
+                fs.unlinkSync(real);
+                ok.push(path.relative(root, real));
+            } catch (e) { skipped.push(`${rel} (${e.message})`); }
+        }
+        lastList.delete(from);   // numbers are stale now -> run .files again
+
+        let t = '';
+        if (ok.length) t += `🗑️ Delete වුණා (${ok.length}):\n` + ok.map((x) => `• ${x}`).join('\n');
+        if (skipped.length) t += `${t ? '\n\n' : ''}⚠️ Skip කළා (${skipped.length}):\n` + skipped.map((x) => `• ${x}`).join('\n');
+        t += '\n\nℹ️ අලුත් listing එකට *.files* ගහන්න.';
+        reply(t);
     } catch (e) {
         console.error('[delfile]', e);
         reply(`❌ ${e.message}`);
