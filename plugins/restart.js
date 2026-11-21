@@ -14,7 +14,7 @@ try{
 const {exec} = require("child_process")
 reply("restarting APEX-MD...")
 await sleep(1500)
-exec("pm2 restart all")
+exec("pm2 restart all", (err) => { if (err) process.exit(0); }) // no pm2 (e.g. Hugging Face) -> exit, platform restarts us
 }catch(e){
 console.log(e)
 reply(`${e}`)
