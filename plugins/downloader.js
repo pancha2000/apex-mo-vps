@@ -89,6 +89,7 @@ function downloadYtdlp(url, dir, audioOnly) {
         '--max-filesize', `${Math.floor(MAX_BYTES / 1048576)}M`,
         '-o', path.join(dir, '%(title).120B [%(id)s].%(ext)s'),
         '--no-simulate', '--print', 'after_move:filepath'];
+    if (fs.existsSync(config.YTDLP_COOKIES)) args.unshift('--cookies', config.YTDLP_COOKIES); // YouTube bot-check workaround
     if (audioOnly) args.push('-x', '--audio-format', 'mp3');
     else args.push('-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format', 'mp4');
     args.push('--', url);
@@ -96,7 +97,9 @@ function downloadYtdlp(url, dir, audioOnly) {
         execFile(config.YTDLP_BIN, args, { maxBuffer: 10 * 1024 * 1024, timeout: 30 * 60 * 1000 }, (err, stdout, stderr) => {
             if (err) {
                 if (err.code === 'ENOENT') return reject(new Error('yt-dlp install කරලා නැහැ (bash start.sh run කරන්න)'));
-                return reject(new Error((stderr || err.message).toString().trim().split('\n').pop()));
+                const msg = (stderr || err.message).toString().trim().split('\n').pop();
+                if (/confirm you.re not a bot|Sign in to confirm/i.test(msg)) return reject(new Error('YouTube bot-check: cookies.txt ඕන (server එකේ bot folder එකට දාන්න)'));
+                return reject(new Error(msg));
             }
             const out = stdout.toString().trim().split('\n').filter(Boolean).pop();
             if (!out || !fs.existsSync(out)) return reject(new Error('yt-dlp: file එක හම්බුණේ නැහැ'));
