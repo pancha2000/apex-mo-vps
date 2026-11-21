@@ -22,5 +22,7 @@ module.exports = {
     WHOLE_MAX_MB: Number(process.env.WHOLE_MAX_MB || 1900), // bigger than this is split
     PART_MB: Number(process.env.PART_MB || 1500),           // size of each split part
     YTDLP_BIN: process.env.YTDLP_BIN || 'yt-dlp',
+    // Netscape-format cookies.txt for yt-dlp (fixes "Sign in to confirm you're not a bot"). Optional.
+    YTDLP_COOKIES: process.env.YTDLP_COOKIES || path.join(__dirname, 'cookies.txt'),
     VPS_FILES_DIR: process.env.VPS_FILES_DIR || path.join(__dirname, 'files'),
 };
